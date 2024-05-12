@@ -1,0 +1,560 @@
+---
+title: "Hardware Visualization"
+author: "Ahmad Zalmout"
+format: html
+editor: visual
+---
+
+# Introduction
+
+In this document different generations of CPUs and GPUs are analysed in order to help anyone who is in the market for a PC build whether for gaming, content creation, or heavy workloads.
+
+All plots and charts you see in this document are made using R programming language.
+
+Kindly note that this is **not** a comparison of the latest hardware rather, it is based on a data set that was taken from Kaggle. For further reference, refer to the page of the data set on the following link: [Computer Hardware Dataset (kaggle.com)](https://www.kaggle.com/datasets/dilshaansandhu/general-computer-hardware-dataset)
+
+# Objective
+
+As we all know, building a PC can be quite cumbersome and tedious, and most definitely not budget friendly. So any bad choice would cost money time, and effort.
+
+Moving a step further in helping to choose the right components for your need, check out this document that will (hopefully) help you decide or at least give an idea on what to look for in the stores.
+
+# Libraries
+
+The code snippet below calls the required libraries:
+
+```{r}
+library(tidyverse)
+library(stringr)
+library(readr)
+library(scales)
+```
+
+# Importing the data
+
+```{r}
+# Importing CPU data
+cpu <- read.csv("CPUData.csv", na = c(" ", "", "GHz")) 
+cpu <- select(cpu, c('Name', 'Producer', 'Base.Clock', 'Turbo.Clock', 'Cores', 'Threads', 'TDP'))
+
+# Importing GPU data
+gpu <- read.csv("GPUData.csv", na = c(' ', '', 'MHz'))
+gpu <- select(gpu, c('Name', 'Producer', 'HDMI', 'Boost.Clock', 'Vram', 'Memory.Clock'))
+```
+
+# CPU
+
+![](images/cpu.jpg){width="130"}
+
+The central processing unit (CPU) is the computational powerhouse of a computer, responsible for executing instructions and managing tasks. Often referred to as the processor, it interprets program code and orchestrates data flow within the system. The CPU's performance directly influences a computer's speed and efficiency, with ongoing technological advancements continually enhancing processing power and efficiency.
+
+Let's now have a look at the CPU data set
+
+```{r}
+
+head(cpu)
+```
+
+### *CPU Data Preprocessing*
+
+Displaying below the number of NA values in each column:
+
+```{r}
+
+na_table <- data.frame(
+  na_Count = colSums(is.na(cpu))
+)
+
+na_table
+```
+
+However the number of CPU's in the data is:
+
+```{r}
+print(nrow(cpu))
+```
+
+So removing NA values is not a practical solution because it would remove considerable number of rows.
+
+Also, replacing NA values with mean values is not accurate. Because for example we cannot fill in mean price values as each CPU have unique price based on its clock speed and number of cores. Luckily for the missing price values, it can be easily known once a CPU is chosen. Because the full name, MPN (Manufacturer Part Number, EAN (European Article Number) are all known so it would be easy to find online.
+
+However, *Base_Clock* have low number of NA values so we can remove them.
+
+Removing NA values from *base_clock*
+
+```{r}
+
+cpu <- cpu[complete.cases(cpu[, 'Base.Clock']), ]
+```
+
+It was noticed that a number of entries had the number of cores 0 which is not logical. After inspecting the official website of the chips, it was noted that those CPUs actually have 10 cores. So it was an input error.
+
+Replacing *Cores* values of 0 with 10
+
+```{r}
+
+cpu$Cores[cpu$Cores == 0] <- 10
+```
+
+Columns *Base_Clock* and *Turbo_Clock* are of type character, so we need to convert them to numeric. Also we need to remove the unit (GHz) from the values, below is the code to do that
+
+```{r}
+
+# Converting the Base.Clock values to numeric
+cpu$base_clock <- as.numeric(substr(cpu$Base.Clock, 1,3))
+
+# Converting the Turbo.Clock values to numeric
+cpu$turbo_clock <- as.numeric(substr(cpu$Turbo.Clock, 1,3))
+
+# Converting the TDP values to numeric
+cpu$tdp <- as.numeric(substr(cpu$TDP, 1, 3))
+```
+
+### *Getting to know the data*
+
+As it is know in the PC world, the 2 most common manufacturers that make PC CPUs are Intel and AMD. So let's check our data how is it distributed:
+
+```{r}
+
+prod_plot <- ggplot(cpu, mapping = aes(x = Producer, fill = Producer)) 
+prod_plot + geom_bar(color = "black", linewidth = 0.5) + 
+  scale_fill_manual(values = c('#ED1C24','#00C7FD')) +
+  labs(title = "CPU Producers", x = "Manufacturer", y = "CPU count") + 
+    geom_text(
+    stat = "count",
+    aes(label = after_stat(count)),
+    vjust = -0.25,
+    size = 4,
+    color = "black"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "none"
+  )
+```
+
+As you can see, there are more Intel CPU's than AMD so our analysis will be slightly biased towards Intel.
+
+Lets now look at the CPU speeds.
+
+\
+The term "CPU speed" typically refers to the clock speed or clock frequency of a CPU. The CPU clock speed is measured in Hertz (Hz) and represents how quickly the processor can execute instructions. Commonly, CPU speeds are expressed in gigahertz (GHz), where one gigahertz equals one billion Hertz.
+
+Here are some key points related to CPU speed:
+
+1.  **Clock Speed:** This is the rate at which a CPU completes basic instructions or cycles per second. Higher clock speeds generally indicate faster processing capability. For example, a CPU with a clock speed of 3.0 GHz can perform three billion cycles per second.
+
+2.  **Base Clock Speed:** The base clock speed is the default operating frequency of the CPU. It is the speed at which the CPU runs under normal conditions without any adjustments or enhancements.
+
+3.  **Turbo Clock speed:** Many modern CPUs have a feature called Turbo Boost (or similar names depending on the manufacturer) that allows the processor to temporarily increase its clock speed above the base frequency when additional performance is needed. This is particularly useful for handling demanding tasks or workloads. This happens dynamically based on factors such as the number of active cores, power consumption, and temperature.
+
+4.  **Measuring Performance:** While clock speed is an important factor, it is not the sole determinant of a CPU's performance. Other factors, such as the number of cores, architecture, cache size, and efficiency, also play crucial roles in determining how well a CPU performs in various applications. However, in our data set only base clock, turbo clock, number of cores and threads are available. So we can work on only those factors for now.
+
+5.  **Multi-Core Processors:** Many modern CPUs are multi-core, meaning they have multiple processing units (cores) on a single chip. Each core can execute instructions independently, allowing for parallel processing. The combined performance of multiple cores contributes to overall system performance.
+
+In the context of Cores and Threads, they are related but distinct concepts that refer to different aspects of a processor's architecture and functionality.
+
+1.  **Core:**
+
+    -   A core is an individual processing unit within a CPU that can execute its own set of instructions independently of other cores.
+
+    -   Modern CPUs often have multiple cores on a single chip. For example, a dual-core processor has two cores, a quad-core processor has four cores, and so on.
+
+    -   Each core operates concurrently and can handle its own tasks, contributing to parallel processing and improved overall performance.
+
+    -   Having multiple cores allows a CPU to handle multiple tasks simultaneously, enhancing multitasking capabilities.
+
+2.  **Thread:**
+
+    -   A thread, in the context of a CPU, refers to a sequence of instructions that can be executed independently by a single core.
+
+    -   Hyper-Threading (HT) is a technology developed by Intel (and similar technologies like SMT or Simultaneous Multi-Threading by AMD) that allows a single physical core to behave like two logical cores, each capable of executing its own thread.
+
+    -   In a system with hyper-threading, a dual-core processor with hyper-threading may appear as if it has four logical cores. This technology aims to improve overall efficiency by allowing a core to switch between threads quickly when one thread is waiting for data or resources.
+
+In summary, a core is a physical processing unit that can independently execute instructions, while a thread refers to a sequence of instructions that can be executed by a core. Hyper-Threading is a technology that enhances multitasking by allowing a single core to handle multiple threads simultaneously. The number of cores and threads in a CPU is a key factor in determining its processing power and multitasking capabilities.
+
+### *Relationships*
+
+Now, lets look at some relationships we can conclude from the data.
+
+#### Base Clock Speed
+
+The graph below displays the distribution of base clock speeds in a box plot between the different manufacturers.
+
+```{r}
+# Ploting base clock speeds on box plots
+base_clock_plot <- ggplot(cpu, mapping = aes(x = Producer, y = base_clock, fill = Producer))
+
+base_clock_plot + 
+  geom_boxplot(color = "black", size = 0.5, outlier.color = "black") + 
+  scale_fill_manual(values = c('#ED1C24','#00C7FD')) +
+    labs(title = "Base clock comparison", x = "Manufacturer", y = "Base clock (GHz)") + 
+  theme_minimal() +
+  theme(
+    axis.text = element_text(size = 10),
+    axis.title = element_text(size = 12))
+```
+
+We can see from the graph above that the median base clocks for both producers are nearly the same. In addition, the interquartile range of Intel base speed values is larger than AMD, meaning there are more speed values. That is due to the fact that the data set have more Intel chips as we saw earlier.
+
+It is worth mentioning that Intel base speed values are negatively skewed indicating more values in the lower range of speeds. However, AMD speed values are not skewed meaning that the data is equally distributed across the range of speed values.
+
+Moreover, there are outliers at AMD in both ends but Intel only in the lower end
+
+Let us consider now the base clock speed against number of cores.
+
+```{r}
+# Ploting base clock speeds against number of cores in a scatter plot
+core_v_base <- cpu %>% ggplot(mapping = aes(x = Cores, y = base_clock, color = Producer))
+
+core_v_base + geom_point() + 
+  scale_color_manual(values = c("AMD" = "#ED1C24", "Intel" = "#00C7FD")) +
+  scale_x_log10() + 
+  scale_y_log10() +
+  labs(title = "Base clock against no. of Cores", x = "No. of Cores", y = "Base clock (GHz)") + 
+  theme_bw()
+```
+
+As you can see, still Intel occupies wider range of base clock speeds this might be due to the fact that there are more Intel CPUs in the data set than AMD. On the other hand, AMD have much higher no. of cores with high clock speeds. This means that these chips specialize in scenarios where parallel processing and multitasking are required, for instance, Video editing, 3D rendering, Scientific computing, or Machine Learning.
+
+Meanwhile, In the low number of cores category (1 - 10) Intel have the more chips than AMD across the whole range of speed.
+
+#### Turbo clock speed
+
+We will start looking at the turbo clock speeds.
+
+```{r}
+# Ploting turbo clock speeds on box plots
+turbo_clock_plot <- cpu %>% filter(!is.na(turbo_clock)) %>% ggplot(mapping = aes(x = Producer, y = turbo_clock, fill = Producer))
+turbo_clock_plot +
+ geom_boxplot(color = "black", size = 0.5, outlier.color = "black") +
+  scale_fill_manual(values = c('#ED1C24', '#00C7FD')) +
+  labs(
+    title = "Turbo Clock Comparison",
+    x = "Manufacturer",
+    y = "Turbo Clock (GHz)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text = element_text(size = 10),
+    axis.title = element_text(size = 12)
+  )
+```
+
+The graph above shows the turbo clock speeds we have in our data set.
+
+First of all, there are outliers speeds in AMD but not in Intel.
+
+Second, the interquartile range and the whiskers of Intel chips is larger than of AMD which indicates wider range of values of speeds.
+
+Finally, AMD turbo clock speeds are slightly negatively skewed indicating the concentration of speed values in the lower end. However, Intel speeds are not skewed indicating equal concentration of speed values.
+
+Below is a comparison between base clock and turbo clock speeds.
+
+```{r}
+# Ploting base clock vs. turbo clock speeds
+turbo_clock_plot <- cpu %>% filter(!is.na(turbo_clock)) %>% ggplot(mapping = aes(x = base_clock, y = turbo_clock))
+turbo_clock_plot + 
+   geom_point(size = 2, alpha = 0.8, color = "#1f78b4") +
+  geom_smooth(method = 'gam', se = FALSE, color = "#33a02c", size = 1.2) +
+  labs(
+    title = 'Turbo Clock vs. Base Clock',
+    x = 'Base Clock (GHz)',
+    y = 'Turbo Clock (GHz)'
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text = element_text(size = 10),
+    axis.title = element_text(size = 12)
+  )
+```
+
+The relationship above is a positive correlation. So as the speed of the base clock increases, the turbo clock increases.
+
+However, up to base clock 3.25 GHz the correlation is weak. Meaning an increase in base clock causes a slight increase in turbo speed.
+
+After that, the correlation increases and becomes more significant. So an increase in base clock increases the turbo clock at a higher rate than before.
+
+```{r}
+
+plot <- ggplot(cpu, mapping = aes(x = Cores, y = turbo_clock, color = Producer)) 
+
+plot + geom_point() + 
+  scale_x_log10() +
+  scale_color_manual(values = c("AMD" = "#ED1C24", "Intel" = "#00C7FD")) +
+  labs(title = "Turbo clocks vs no. of cores", x = "no. of cores", y = "turbo clock (GHz)") + 
+  theme_minimal()
+```
+
+The above graph indicates that AMD chips occupy wider range of no. of cores values.
+
+#### TDP
+
+Thermal Design Power is a crucial metric in the realm of computer hardware, particularly for processors like CPUs. It represents the maximum amount of heat that a chip is expected to generate under normal operating conditions, expressed in watts. TDP serves as a guideline for system builders and users, offering insights into the thermal demands and power dissipation of a CPU. A higher TDP suggests increased heat production, necessitating effective cooling solutions to prevent overheating. While TDP is not a direct measure of a CPU's power consumption, it remains a valuable indicator for designing efficient cooling systems and ensuring the stability and longevity of computer hardware in diverse applications.
+
+```{r}
+# Ploting boxplots for TDP values
+tdp_plot <- cpu %>% ggplot(mapping = aes(x = Producer, y = tdp, fill = Producer))
+
+tdp_plot +
+  geom_boxplot() + 
+  scale_fill_manual(values = c('#ED1C24','#00C7FD')) +
+  labs(title = "Boxplot of TPD", x = "Manufacturer", y = "TDP (W)") + 
+  theme_linedraw()
+```
+
+The plot above shows that interquartile range of both producers is approximately similar. The median value of Intel is slightly lower. However, AMD has outliers indicating that they have extremely high TDP values in their lineup.
+
+### Conclusion
+
+In conclusion, determining the best CPU is a subjective task that hinges on individual needs and specific use cases. The graphs presented above aim to provide readers with a comprehensive overview of the market, highlighting the offerings of the two leading CPU producers in the industry. It is crucial to recognize that there is no one-size-fits-all solution, as users may prioritize different factors such as gaming performance, content creation capabilities, or power efficiency. The diverse array of CPUs from leading manufacturers offers a range of options tailored to varying requirements. Ultimately, making an informed decision involves considering personal preferences, intended use, and the specific demands of the tasks a CPU will handle.
+
+# GPU
+
+![](images/graphic_driver.png){fig-alt="Graphic driver" width="130"}
+
+A graphics card, also known as a GPU (Graphics Processing Unit) or video card, is a crucial component in a computer system responsible for rendering and displaying visual information. It plays a pivotal role in handling graphics-intensive tasks, such as gaming, video editing, and rendering.
+
+This component is becoming one of the most expensive hardware of a computer due to its increase in complexity and advancement in rendering high resolutions and refresh rates. And of course we cannot ignore the boom that happened after the introduction of Cryptocurrencies mining which increased the demand on GPUs.
+
+Let's now look at the data.
+
+```{r}
+head(gpu)
+```
+
+### *GPU Preprocessing*
+
+```{r}
+# Checking for na values
+na_gpu <- data.frame(
+  na_Count = colSums(is.na(gpu))
+)
+
+na_gpu
+```
+
+```{r}
+# Displaying number of rows
+print(nrow(gpu))
+```
+
+Since NA values are few compared to the total rows. Removing them would not affect the analysis.
+
+```{r}
+# Removing na values
+gpu <- gpu[complete.cases(gpu[, 'Boost.Clock']), ]
+gpu <- gpu[complete.cases(gpu[, 'Memory.Clock']), ]
+```
+
+```{r}
+# Converting Boost Clock, Memory Clock, and Vram to numerals
+gpu <- gpu %>% mutate(
+  boostClock = as.numeric(gsub("\\D", "", Boost.Clock)) / 1000,
+  memoryClock = as.numeric(gsub("\\D", "", Memory.Clock)),
+  vram = as.numeric(gsub('[^0-9.]','',Vram)))
+```
+
+### *Getting to know the data*
+
+The data set has a column named "Producer" containing the names of companies that distribute graphic drivers after modifying GPUs bought from the known Institutions that manufacture them.
+
+For that matter, additional steps are required to separate the rows into the 3 main GPU manufacturers.
+
+```{r}
+# Categorizing producers of graphics drivers into the main manufacturers of GPUs
+gpu <- gpu %>%
+  mutate(gpu_producer = case_when(
+    grepl("GeForce", Name) ~ "Nvidia",
+    grepl("RTX", Name) ~ "Nvidia",
+    grepl("GTX", Name) ~ "Nvidia",
+    grepl("GT", Name) ~ "Nvidia",
+    grepl("Radeon", Name) ~ "Radeon",
+    grepl("RX", Name) ~ "Radeon",
+    grepl("R9", Name) ~ "Radeon",
+    grepl("R7", Name) ~ "Radeon",
+    grepl("HD", Name) ~ "Radeon",
+    grepl("Arc", Name) ~ "Intel",
+    TRUE ~ "Other"
+  ))
+# Ploting the producers of GPUs
+
+gpu_prod_plot <- ggplot(gpu, aes(x = gpu_producer, fill = gpu_producer))
+gpu_prod_plot + 
+  geom_bar(color = "black", linewidth = 0.5) +
+  scale_fill_manual(values = c('#00C7FD', '#76B900', '#ED1C24')) +
+    labs(
+    title = "GPU Manufacturers Distribution",
+    x = "GPU Manufacturer",
+    y = "GPU Count"
+  ) +
+  geom_text(
+    stat = "count",
+    aes(label = after_stat(count)),
+    vjust = -0.25,
+    size = 4,
+    color = "black"
+  ) +
+  
+  theme_minimal() +
+  
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "none"
+  )
+```
+
+The plot above displays the count of each GPU manufacturer in the data set.
+
+Nvidia appears to be the highest number. indicating that it might have the majority of the number of GPUs in the market.
+
+On the other hand, Intel is the lowest as they specialize in CPU manufacturing. That being said, every Intel CPU (except for server or high-performance CPUs) has an integrated (embedded) GPU inside it but not as powerful. It is only used to perform everyday tasks that don't require intense graphics processing, for instance, displaying the GUI of the operating system, and processing media playback.
+
+Graphic drivers have the following key components:
+
+1.  **GPU (Graphics Processing Unit):** The GPU is the core component responsible for executing complex mathematical calculations required for rendering graphics. It performs tasks like shading, rendering polygons, and handling transformations to create the visual images displayed on a screen.
+
+2.  **Video Memory (VRAM):** VRAM is a dedicated type of memory on the graphics card used to store textures, frame buffers, and other graphical data. Having sufficient VRAM is essential for handling high-resolution textures and complex scenes without slowing down performance.
+
+3.  **Memory speed:** refers to the operating frequency of the video memory (VRAM) on the graphics card. It is also measured in megahertz (MHz) or gigahertz (GHz).
+
+4.  **Outputs and Connectors:** Graphics cards come with various outputs and connectors for connecting to displays. Common connectors include HDMI, DisplayPort, and DVI. Some modern graphics cards also support features like HDMI 2.1 for high refresh rates and resolutions.
+
+Understanding these components helps users make informed decisions when selecting a graphics card based on their specific needs and the demands of the applications or games they plan to run on their computer.
+
+Boost Clock
+
+The boost clock in a GPU signifies the peak operating frequency achievable under optimal conditions. This dynamic clock adjusts based on factors like temperature and workload, providing additional performance beyond the base clock during demanding tasks such as gaming or content creation. It reflects the card's ability to maximize performance under varying conditions.
+
+### *Relationships*
+
+Now, lets look at some relationships we can conclude from the data.
+
+#### Memory Clock
+
+```{r}
+# Ploting base clock speeds on box plots
+gpu_memory_plot <- ggplot(gpu, aes(x = gpu_producer, y = memoryClock, fill = gpu_producer))
+gpu_memory_plot +
+  geom_boxplot(color = "black", outlier.color = "black") +
+    scale_fill_manual(values = c('#00C7FD', '#76B900', '#ED1C24')) +
+    labs(
+    title = "GPU Memory Clock Comparison",
+    x = "Manufacturer",
+    y = "Memory Clock (MHz)"
+  ) +
+    theme_minimal() +
+    theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "none"
+  )
+```
+
+The large interquartile range in Nvidia might be as a result from the higher number of samples in the data. However, the median of memroy clock in Nvidia is significantly higher than Radeon. This might indicate a better performing Nvidia based graphic cards memory clocks in the market.
+
+On the other hand, there are some outliers in Radeon graphic cards which indicate the presence of high memory clocks. These outliers still within the same range of values of memory clocks of Nvidia.
+
+Intel has the lowest interquartile range as there are only 4 cards in the data.
+
+```{r}
+# Ploting all the graphic cards with their coresponding memroy sizes and Vram
+drivers_comparison_plot <- ggplot(gpu, aes(x = Producer, y = memoryClock, color = vram)) 
+drivers_comparison_plot +
+  geom_point(size = 2, alpha = 0.8) +
+  scale_color_gradient(low = "blue", high = "red", name = "Vram (GB)") +
+  theme_minimal(base_size = 14) +
+  labs(
+    title = "GPU Producers and VRAM Comparison",
+    x = "Graphics Driver Producers",
+    y = "Memory Clock"
+  ) +
+  scale_y_log10() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
+  theme(legend.position = "top") +
+  theme(panel.grid.minor = element_line(color = "lightgray", linewidth = 0.5))
+```
+
+The graph above gives an overview of the high number of companies that make graphic cards. The low number of graphic cards in a company does not necessarily mean that it might be not powerful on the contrary, companies like: ASRock, Club3D, Galax, HIS, KFA2, PowerColor, SAPPHIRE, and Sparkle, all have limited number of cards however in the high end of memory clocks.
+
+In fact, some of them have cards in the red zone of the spectrum of colors in the graph indicating the high size of Vram. Consequently, the bigger the Vram, the higher the memory clock and the below graph is the proof.
+
+```{r}
+# Ploting memory clock verses Vram
+memory_vram_graph <- ggplot(gpu, mapping = aes(x = vram, y = memoryClock))
+memory_vram_graph +
+    geom_point(size = 2, alpha = 0.3, color = "gray") +
+  geom_smooth(method = "lm", se = FALSE, color = "blue", size = 1.5) +  
+  labs(
+    title = "Memory Clock vs VRAM",
+    x = "VRAM (GB)",
+    y = "Memory Clock (MHz)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text = element_text(size = 10),
+    axis.title = element_text(size = 12)
+  )
+```
+
+As shown in the graph above, the higher the Vram the increase in memory clock. This is visible in the linear trend in the blue line.
+
+#### Boost Clock
+
+Visualizing boost clocks in the data set.
+
+```{r}
+# Ploting boost clock speeds on box plots
+gpu_boost_plot <- ggplot(gpu, aes(x = gpu_producer, y = boostClock, fill = gpu_producer))
+gpu_boost_plot +
+  geom_boxplot(color = "black", outlier.color = "black") +
+    scale_fill_manual(values = c('#00C7FD', '#76B900', '#ED1C24')) +
+    labs(
+    title = "GPU Boost Clock Comparison",
+    x = "Manufacturer",
+    y = "Boost Clock (GHz)"
+  ) +
+    theme_minimal() +
+    theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "none"
+  )
+```
+
+It looks like in boost clock, Radeon dominates the market. The interquartile range is the largest with no outliers. Nvidia on the other hand is filled with outliers.
+
+Does an increase in boost clock indicates more HDMI ports?
+
+If the user wants to connect more than one monitor for better visibility, it is required to have more HDMI ports. But does that mean the graphic driver might have more boost clock to handle the load is a question answered in the below graph.
+
+```{r}
+# Ploting boost clock against HDMI
+boost_hdmi_plot <- ggplot(gpu, aes(x = HDMI, y = boostClock)) 
+boost_hdmi_plot +
+  geom_point(position = position_jitter(width = 0.08), size = 3, alpha = 0.7, color = "#1f78b4") +
+  labs(
+    title = "Boost Clock vs HDMI",
+    x = "HDMI",
+    y = "Boost Clock (MHz)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text = element_text(size = 10),
+    axis.title = element_text(size = 12)
+  )
+```
+
+As it is shown. The higher the HDMI ports does not imply increase in boost clock. And most of graphic cards have only one HDMI ports. It might be because users use HDMI adapters that requires one input port to the graphic card.
+
+### Conclusion
+
+In conclusion, the choice between GPU manufacturers ultimately depends on the user's specific needs and preferences, as each graphics card has its unique strengths and applications. Asserting that one manufacturer is universally superior to another oversimplifies the diverse landscape of GPU offerings. It's crucial to consider individual requirements, whether it be for gaming, content creation, or professional work, as these factors influence the optimal choice between NVIDIA, AMD Radeon, or other options.
+
+Moreover, it's worth acknowledging that the abundance of data in NVIDIA's dataset might introduce a subtle bias into performance analyses, potentially favoring certain applications or workloads. Users should be mindful of this aspect when interpreting memory clock speeds, Vram or any other metric.
+
+When it comes to AMD Radeon cards, it appears that they specialization in higher memory clocks and larger VRAM capacities. This can be advantageous for specific workloads, such as high-resolution content creation or complex rendering tasks. However, the suitability of Radeon cards also depends on the specific model and use case.
+
+It is worth noting that Intel's graphic cards, are rarely employed as standalone graphics cards in high-performance scenarios.
+
+The landscape of GPU options is dynamic, and as technology continues to evolve, user requirements should guide the decision-making process when selecting the most appropriate graphics solution for a given task or system configuration.
